@@ -1,0 +1,42 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1020 150" role="img" aria-labelledby="title">
+  <title id="title">Channel._step: read, add, poll, emit</title>
+  <defs>
+    <marker id="step-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#656d76"/>
+    </marker>
+  </defs>
+  <style>
+    .box { fill: #f6f8fa; stroke: #8b949e; stroke-width: 1.5; }
+    .step { fill: #1f2328; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 14px; font-weight: 600; text-anchor: middle; }
+    .desc { fill: #656d76; font-family: system-ui, -apple-system, Segoe UI, sans-serif; font-size: 12px; text-anchor: middle; }
+    .edge { fill: none; stroke: #656d76; stroke-width: 1.5; marker-end: url(#step-arrow); }
+  </style>
+
+  <rect class="box" x="8" y="16" width="220" height="118" rx="6"/>
+  <text class="step" x="118" y="42">read</text>
+  <text class="desc" x="118" y="68">Drain the Redis backlog</text>
+  <text class="desc" x="118" y="86">since the last stream ID</text>
+  <text class="desc" x="118" y="104">into measured samples</text>
+
+  <rect class="box" x="268" y="16" width="220" height="118" rx="6"/>
+  <text class="step" x="378" y="42">add</text>
+  <text class="desc" x="378" y="68">Snap each sample onto</text>
+  <text class="desc" x="378" y="86">the grid; drop jitter or</text>
+  <text class="desc" x="378" y="104">queue late corrections</text>
+
+  <rect class="box" x="528" y="16" width="220" height="118" rx="6"/>
+  <text class="step" x="638" y="42">poll</text>
+  <text class="desc" x="638" y="68">Finalize due grid points</text>
+  <text class="desc" x="638" y="86">as measured, imputed, or</text>
+  <text class="desc" x="638" y="104">forecast, plus corrections</text>
+
+  <rect class="box" x="788" y="16" width="220" height="118" rx="6"/>
+  <text class="step" x="898" y="42">emit</text>
+  <text class="desc" x="898" y="68">XADD one output entry</text>
+  <text class="desc" x="898" y="86">with valid_time, value,</text>
+  <text class="desc" x="898" y="104">and quality arrays</text>
+
+  <line class="edge" x1="228" y1="75" x2="262" y2="75"/>
+  <line class="edge" x1="488" y1="75" x2="522" y2="75"/>
+  <line class="edge" x1="748" y1="75" x2="782" y2="75"/>
+</svg>

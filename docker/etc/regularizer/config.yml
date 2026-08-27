@@ -1,0 +1,18 @@
+version: 1
+
+logging:
+  loggers:
+    rdp-regularizer:
+      level: "DEBUG"
+      handlers: ["console"]
+    peewee:
+      level: "INFO"
+    asyncio:
+      level: "INFO"
+
+redis:
+  host: !env-template "${REGULARIZER_REDIS_HOST}"
+  port: !env-template "${REGULARIZER_REDIS_PORT}"
+  db: !env-template "${REGULARIZER_REDIS_DB}"
+
+channels:
