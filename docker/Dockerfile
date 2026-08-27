@@ -1,4 +1,5 @@
-FROM python:3.10-slim AS builder
+ARG DOCKER_PROXY_PREFIX
+FROM ${DOCKER_PROXY_PREFIX}python:3.10-slim AS builder
 
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
 
@@ -15,7 +16,7 @@ RUN touch README.md
 COPY uv.lock pyproject.toml ./
 RUN uv sync --frozen --no-install-project --no-dev
 
-FROM python:3.10-slim
+FROM ${DOCKER_PROXY_PREFIX}python:3.10-slim
 
 WORKDIR /app
 
