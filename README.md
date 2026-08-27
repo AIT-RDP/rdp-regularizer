@@ -40,7 +40,14 @@ Polling is aligned to `epoch + k * polling_interval + offset`.
 
 ## Configuration
 
-The process loads YAML through `pyrdp_commons.cli.setup_app`. The config path is `-c` / `--config` (default `config.yml` in the working directory), or the `REGULARIZER_CONFIG` environment variable. A full example is in [`docs/config.md`](docs/config.md).
+The process loads YAML through `pyrdp_commons.cli.setup_app`. Paths can be set on the CLI or via environment variables:
+
+| Option | Env var | Default | Role |
+|--------|---------|---------|------|
+| `-c` / `--config` | `REGULARIZER_CONFIG` | `config.yml` | YAML config file |
+| `--env` | `REGULARIZER_ENV` | unset | optional dotenv file for `!env-template` substitution |
+
+YAML values may use `!env-template "${VAR}"` (see [`docker/etc/regularizer/config.yml`](docker/etc/regularizer/config.yml)). A full example is in [`docs/config.md`](docs/config.md).
 
 **Durations** (`ms`, `s`, `m`, `h`, `d`, `w`, e.g. `30s`, `1m`); bare numbers are seconds.
 
@@ -67,11 +74,11 @@ uv sync
 python -m regularizer
 ```
 
-Override the default path with `-c` / `--config`, or with `REGULARIZER_CONFIG`:
+Override paths with `-c` / `--config` and `--env`, or with `REGULARIZER_CONFIG` and `REGULARIZER_ENV`:
 
 ```
-python -m regularizer -c /path/to/config.yml
-REGULARIZER_CONFIG=/path/to/config.yml python -m regularizer
+python -m regularizer -c /path/to/config.yml --env /path/to/.env
+REGULARIZER_CONFIG=/path/to/config.yml REGULARIZER_ENV=/path/to/.env python -m regularizer
 ```
 
 Ctrl+C sets the stop event and joins channel threads (10s timeout). Logging is configured from the same YAML via pyrdp-commons.
