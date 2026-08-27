@@ -8,6 +8,11 @@ variables:
   UV_VERSION: "0.12.1"
   # Version of the tool that derives the package version from the git history
   DUNAMAI_VERSION: "1.17.0"
+  # The kaniko component always pushes to CI_REGISTRY_IMAGE. GitLab leaves that
+  # predefined variable empty when the project's Container Registry is not
+  # enabled, which produces invalid destinations such as `:latest-dev`.
+  # Reconstruct the standard registry path so --destination is a valid image.
+  CI_REGISTRY_IMAGE: "${CI_REGISTRY}/${CI_PROJECT_PATH}"
 
 include:
   - component: "$CI_SERVER_FQDN/ees/rdp/generic-components/rdp-cicd-components/kaniko@main"
