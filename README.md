@@ -90,3 +90,10 @@ uv run pytest
 ```
 
 [`pyproject.toml`](pyproject.toml) sets Hatchling `allow-direct-references` so the git `pyrdp-commons` dependency can be built.
+
+## Funding Acknowledgments
+
+<img alt="European Flag" src="https://upload.wikimedia.org/wikipedia/commons/thumb/b/b7/Flag_of_Europe.svg/330px-Flag_of_Europe.svg.png" align="left" style="margin-right: 10px" height="57"/> Parts of this development have been supported by the [REFORMERS] project of the European Union’s research and innovation programme Horizon Europe under the grant agreement No.101136211. Parts of this development have been supported by the [CELINE] project of the European Union’s research and innovation programme Horizon Europe under the grant agreement No.101160667.
+
+[REFORMERS]: https://reformers-energyvalleys.eu/
+[CELINE]: https://www.celineproject.eu/
