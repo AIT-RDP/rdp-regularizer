@@ -10,8 +10,8 @@ Requires Python `>=3.10`.
 
 - Incoming samples snap to the nearest grid point when `|timestamp - grid| <= jitter_tolerance` (default `0.5 * update_interval`). If several samples map to the same point, the closest wins; farther ones are dropped.
 - **measured** — a snapped sample is pending for that grid point.
-- **imputed** — an interior gap: later measured data is already pending. The `default` imputer is last observation carried forward (else the bounding next sample, else NaN).
-- **forecast** — no data by the deadline `grid_time + lag_time`. The `default` forecaster repeats the last history value (else NaN).
+- **imputed** — an interior gap: later measured data is already pending. The `default` imputer is pandas `ffill` then `bfill` through the last known value (trailing holes stay empty).
+- **forecast** — no data by the deadline `grid_time + lag_time`. The `default` forecaster is pandas `ffill` (else NaN).
 - Optional TimescaleDB bootstrap replays raw history into that window and publishes it to the output stream before live polling starts.
 
 ## Architecture

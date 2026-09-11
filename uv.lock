@@ -708,6 +708,7 @@ version = "0.1.0"
 source = { editable = "." }
 dependencies = [
     { name = "click" },
+    { name = "pandas" },
     { name = "peewee" },
     { name = "psycopg2-binary" },
     { name = "pyrdp-commons" },
@@ -723,6 +724,7 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "click", specifier = ">=8.1.8,<9.0.0" },
+    { name = "pandas", specifier = ">=2.3.3" },
     { name = "peewee", specifier = ">=3.17.0,<4.0.0" },
     { name = "psycopg2-binary", specifier = ">=2.9.0,<3.0.0" },
     { name = "pyrdp-commons", git = "https://github.com/AIT-RDP/pyrdp-commons.git" },

@@ -13,6 +13,7 @@ dependencies = [
     "peewee>=3.17.0,<4.0.0",
     "psycopg2-binary>=2.9.0,<3.0.0",
     "pyrdp-commons @ git+https://github.com/AIT-RDP/pyrdp-commons.git",
+    "pandas>=2.3.3",
 ]
 
 [dependency-groups]
