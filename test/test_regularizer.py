@@ -10,7 +10,9 @@ from regularizer.sample import Sample
 from regularizer.tools import DefaultForecaster, DefaultImputer
 
 
-def _make_regularizer(logger, start_time, interval, provider=None, **config_overrides):
+def _make_regularizer(
+    logger, start_time, interval, provider=None, imputer=None, forecaster=None, **config_overrides
+):
     kwargs = dict(
         name='test',
         input_stream='in',
@@ -25,8 +27,8 @@ def _make_regularizer(logger, start_time, interval, provider=None, **config_over
     config = ChannelConfig(**kwargs)
     reg = TimeGridRegularizer(
         config=config,
-        imputer=DefaultImputer(),
-        forecaster=DefaultForecaster(),
+        imputer=imputer or DefaultImputer(),
+        forecaster=forecaster or DefaultForecaster(),
         history_provider=provider,
         logger=logger,
         start_time=start_time,
@@ -184,10 +186,17 @@ def test_late_unknown_timestamp_dropped(
 
 
 def test_poll_before_deadline_emits_nothing(logger, start_time: datetime, interval: timedelta):
-    reg = _make_regularizer(logger, start_time, interval, lag_time=timedelta(seconds=30))
+    imputer = MagicMock()
+    forecaster = MagicMock()
+    reg = _make_regularizer(
+        logger, start_time, interval, imputer=imputer, forecaster=forecaster,
+        lag_time=timedelta(seconds=30),
+    )
     emitted = reg.poll(now=start_time + timedelta(seconds=1), interval=interval)
     assert emitted == []
     assert reg._next_grid_ts == start_time
+    imputer.impute.assert_not_called()
+    forecaster.forecast.assert_not_called()
 
 
 def test_lag_time_delays_forecast(logger, start_time: datetime, interval: timedelta):
@@ -262,6 +271,33 @@ def test_poll_finalizes_several_grid_points(
     emitted = regularizer.poll(now=start_time + timedelta(seconds=1), interval=3 * interval)
     assert [s.value for s in emitted] == [1.0, 2.0, 3.0]
     assert [s.quality for s in emitted] == ['measured', 'measured', 'measured']
+
+
+def test_mixed_horizon_calls_impute_and_forecast_once(
+    logger, start_time: datetime, interval: timedelta
+):
+    imputer = MagicMock()
+    forecaster = MagicMock()
+    imputer.impute.side_effect = lambda samples, config: DefaultImputer().impute(samples, config)
+    forecaster.forecast.side_effect = (
+        lambda samples, config: DefaultForecaster().forecast(samples, config)
+    )
+    reg = _make_regularizer(logger, start_time, interval, imputer=imputer, forecaster=forecaster)
+
+    later = start_time + 2 * interval
+    reg.add(Sample(timestamp=later, value=20.0, quality='measured'))
+    emitted = reg.poll(now=start_time + 4 * interval + timedelta(seconds=1), interval=4 * interval)
+
+    assert imputer.impute.call_count == 1
+    assert forecaster.forecast.call_count == 1
+
+    by_ts = {s.timestamp: s for s in emitted}
+    assert by_ts[start_time].quality == 'imputed'
+    assert by_ts[start_time + interval].quality == 'imputed'
+    assert by_ts[later].quality == 'measured'
+    assert by_ts[later].value == 20.0
+    assert by_ts[start_time + 3 * interval].quality == 'forecast'
+    assert by_ts[start_time + 4 * interval].quality == 'forecast'
 
 
 def test_bootstrap_skipped_without_provider(

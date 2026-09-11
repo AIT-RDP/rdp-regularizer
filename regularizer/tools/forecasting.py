@@ -8,7 +8,7 @@ Real forecasting methods are available separately; DummyForecaster stands in for
 from __future__ import annotations
 
 from math import nan
-from typing import Callable, Dict, Protocol, Sequence
+from typing import Callable, Dict, List, Protocol, Sequence
 
 from ..config import ChannelConfig
 from ..sample import Sample
@@ -16,31 +16,34 @@ from ..sample import Sample
 
 class Forecaster(Protocol):
     """
-    Extrapolates the value of a grid point from history only.
+    Fills remaining holes in a sample sequence from history only (no right bound).
     """
 
-    def forecast(self, target_ts, history: Sequence[Sample],
-                 config: ChannelConfig) -> float:
+    def forecast(self, samples: Sequence[Sample], config: ChannelConfig) -> Sequence[Sample]:
         """
-        Forecast the value of a grid point from history only.
+        Return a sequence with the same timestamps, length, and order. Known values
+        are left untouched. Remaining ``None`` holes are filled with quality
+        ``'forecast'``.
         """
         ...
 
 
 class DefaultForecaster:
     """
-    Naive forecast: repeat the last value from the fetched history, NaN when none.
+    Naive forecast: last observation carried forward, NaN when none.
     """
 
-    def forecast(self, target_ts, history: Sequence[Sample],
-                 config: ChannelConfig) -> float:
-        start = target_ts - config.window
-        end = target_ts
-        window = [s for s in history if start <= s.timestamp < end]
-
-        if window:
-            return window[-1].value
-        return nan
+    def forecast(self, samples: Sequence[Sample], config: ChannelConfig) -> Sequence[Sample]:
+        last: float | None = None
+        result: List[Sample] = []
+        for sample in samples:
+            if sample.value is not None:
+                last = sample.value
+                result.append(sample)
+                continue
+            fill = last if last is not None else nan
+            result.append(Sample(timestamp=sample.timestamp, value=fill, quality='forecast'))
+        return result
 
 
 FORECASTERS: Dict[str, Callable[[], Forecaster]] = {

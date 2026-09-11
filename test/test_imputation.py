@@ -1,53 +1,86 @@
 """Tests for DefaultImputer."""
 from datetime import datetime, timedelta
-from math import isnan
 
 from regularizer.config import ChannelConfig
 from regularizer.sample import Sample
 from regularizer.tools import IMPUTERS, DefaultImputer
 
 
-def test_imputer_uses_last_value_in_window(channel_config: ChannelConfig, start_time: datetime):
-    missing_ts = start_time
-    history = [
-        Sample(timestamp=missing_ts - timedelta(minutes=2), value=1.0),
-        Sample(timestamp=missing_ts - timedelta(minutes=1), value=2.0),
-        Sample(timestamp=missing_ts, value=99.0),
+def test_imputer_uses_last_value(channel_config: ChannelConfig, start_time: datetime):
+    samples = [
+        Sample(timestamp=start_time - timedelta(minutes=2), value=1.0),
+        Sample(timestamp=start_time - timedelta(minutes=1), value=2.0),
+        Sample(timestamp=start_time, value=None),
+        Sample(timestamp=start_time + timedelta(minutes=1), value=50.0),
     ]
-    next_sample = Sample(timestamp=missing_ts + timedelta(minutes=1), value=50.0)
 
-    value = DefaultImputer().impute(missing_ts, history, next_sample, channel_config)
+    filled = DefaultImputer().impute(samples, channel_config)
 
-    assert value == 2.0
+    assert [s.timestamp for s in filled] == [s.timestamp for s in samples]
+    assert filled[0].value == 1.0
+    assert filled[1].value == 2.0
+    assert filled[2].value == 2.0
+    assert filled[2].quality == 'imputed'
+    assert filled[3].value == 50.0
+    assert filled[3].quality == 'measured'
 
 
 def test_imputer_falls_back_to_next_sample(channel_config: ChannelConfig, start_time: datetime):
-    next_sample = Sample(timestamp=start_time + timedelta(minutes=1), value=7.5)
+    samples = [
+        Sample(timestamp=start_time, value=None),
+        Sample(timestamp=start_time + timedelta(minutes=1), value=7.5),
+    ]
 
-    value = DefaultImputer().impute(start_time, [], next_sample, channel_config)
+    filled = DefaultImputer().impute(samples, channel_config)
 
-    assert value == 7.5
-
-
-def test_imputer_returns_nan_without_history_or_next(
-    channel_config: ChannelConfig, start_time: datetime
-):
-    value = DefaultImputer().impute(start_time, [], None, channel_config)
-    assert isnan(value)
+    assert filled[0].value == 7.5
+    assert filled[0].quality == 'imputed'
+    assert filled[1].value == 7.5
 
 
-def test_imputer_ignores_history_outside_window(
-    channel_config: ChannelConfig, start_time: datetime
-):
-    too_old = Sample(
-        timestamp=start_time - channel_config.window - timedelta(minutes=1),
-        value=1.0,
-    )
-    next_sample = Sample(timestamp=start_time + timedelta(minutes=1), value=4.0)
+def test_imputer_leaves_trailing_holes(channel_config: ChannelConfig, start_time: datetime):
+    samples = [
+        Sample(timestamp=start_time, value=None),
+        Sample(timestamp=start_time + timedelta(minutes=1), value=None),
+    ]
 
-    value = DefaultImputer().impute(start_time, [too_old], next_sample, channel_config)
+    filled = DefaultImputer().impute(samples, channel_config)
 
-    assert value == 4.0
+    assert filled[0].value is None
+    assert filled[1].value is None
+
+
+def test_imputer_fills_only_interior_holes(channel_config: ChannelConfig, start_time: datetime):
+    samples = [
+        Sample(timestamp=start_time, value=3.0),
+        Sample(timestamp=start_time + timedelta(minutes=1), value=None),
+        Sample(timestamp=start_time + timedelta(minutes=2), value=9.0),
+        Sample(timestamp=start_time + timedelta(minutes=3), value=None),
+    ]
+
+    filled = DefaultImputer().impute(samples, channel_config)
+
+    assert filled[1].value == 3.0
+    assert filled[1].quality == 'imputed'
+    assert filled[2].value == 9.0
+    assert filled[2].quality == 'measured'
+    assert filled[3].value is None
+
+
+def test_imputer_same_locf_across_run(channel_config: ChannelConfig, start_time: datetime):
+    samples = [
+        Sample(timestamp=start_time, value=5.0),
+        Sample(timestamp=start_time + timedelta(minutes=1), value=None),
+        Sample(timestamp=start_time + timedelta(minutes=2), value=None),
+        Sample(timestamp=start_time + timedelta(minutes=3), value=20.0),
+    ]
+
+    filled = DefaultImputer().impute(samples, channel_config)
+
+    assert filled[1].value == 5.0
+    assert filled[2].value == 5.0
+    assert filled[1].quality == 'imputed'
+    assert filled[2].quality == 'imputed'
 
 
 def test_imputers_registry_default():

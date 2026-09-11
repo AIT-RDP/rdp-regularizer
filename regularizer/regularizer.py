@@ -17,7 +17,7 @@ import time
 
 from datetime import datetime, timedelta, timezone
 from math import floor
-from typing import Callable, Dict, List, Optional, Tuple
+from typing import Callable, Dict, List, Optional, Sequence, Tuple
 
 from .config import ChannelConfig
 from .history import HistoryProvider, RegularizedHistoryStore
@@ -203,43 +203,31 @@ class TimeGridRegularizer:
         # Get the corrections.
         corrections = self._corrections
         self._corrections = []
-        # Initialize the list of finalized samples.
-        finalized: List[Sample] = []
 
-        while self._next_grid_ts <= horizon:
-            # Get the next grid point.
-            grid_ts = self._next_grid_ts
-            # Get the pending entry for the grid point.
+        # Classify finalizable grid points; stop at the first point that must wait.
+        slots: List[Sample] = []
+        grid_ts = self._next_grid_ts
+        while grid_ts <= horizon:
             pending_entry = self._pending.get(grid_ts)
-            # If the pending entry exists, process it.
             if pending_entry is not None:
-                # Process the pending entry as a measured sample.
-                self._logger.debug('processing pending entry (measured)')
-                sample = pending_entry[0]
-                finalized.append(Sample(timestamp=grid_ts, value=sample.value, quality='measured'))
+                self._logger.debug('classifying pending entry (measured)')
+                slots.append(Sample(timestamp=grid_ts, value=pending_entry[0].value,
+                                    quality='measured'))
             elif any(ts > grid_ts for ts in self._pending):
-                # Process the interior gap as an imputed sample.
-                self._logger.debug('processing interior gap (imputing)')
-                next_sample = self._pending[min(ts for ts in self._pending if ts > grid_ts)][0]
-                value = self._imputer.impute(grid_ts, self._history_for(grid_ts),
-                                             next_sample, self._config)
-                self._logger.debug(f'imputed value {value} for interior gap at {grid_ts.isoformat()}')
-                finalized.append(Sample(timestamp=grid_ts, value=value, quality='imputed'))
+                self._logger.debug('classifying interior gap (impute)')
+                slots.append(Sample(timestamp=grid_ts, value=None, quality='imputed'))
             elif now >= grid_ts + self._config.lag_time:
-                # Process the deadline gap as a forecasted sample.
-                self._logger.debug('processing deadline gap (forecasting)')
-                value = self._forecaster.forecast(grid_ts, self._history_for(grid_ts),
-                                                  self._config)
-                self._logger.debug(f'forecast value {value} for grid point {grid_ts.isoformat()} '
-                                  f'(no data by deadline)')
-                finalized.append(Sample(timestamp=grid_ts, value=value, quality='forecast'))
+                self._logger.debug('classifying deadline gap (forecast)')
+                slots.append(Sample(timestamp=grid_ts, value=None, quality='forecast'))
             else:
                 break
+            grid_ts += self._config.update_interval
 
-            # Remove the grid point from the pending list.
-            self._pending.pop(grid_ts, None)
-            # Update the next grid point.
-            self._next_grid_ts += self._config.update_interval
+        finalized = self._fill_slots(slots) if slots else []
+
+        for slot in slots:
+            self._pending.pop(slot.timestamp, None)
+        self._next_grid_ts = grid_ts
 
         # Extend the history with the finalized samples.
         self._history.extend(finalized)
@@ -269,11 +257,43 @@ class TimeGridRegularizer:
 
         return emitted
 
-    def _history_for(self, grid_ts: datetime) -> List[Sample]:
+    def _fill_slots(self, slots: Sequence[Sample]) -> List[Sample]:
         """
-        Returns the in-memory regularized history window ending at grid_ts.
+        Build history + slots (+ optional right-bound pending), impute interior
+        holes and/or forecast deadline holes in one call each, then return the
+        filled classified slots.
         """
-        return self._history.window(grid_ts - self._config.window, grid_ts)
+        first_ts = slots[0].timestamp
+        history = self._history.window(first_ts - self._config.window, first_ts)
+
+        anchor: List[Sample] = []
+        last = slots[-1]
+        if last.value is None and last.quality == 'imputed':
+            next_ts = min(ts for ts in self._pending if ts > last.timestamp)
+            pending_sample = self._pending[next_ts][0]
+            anchor = [Sample(timestamp=next_ts, value=pending_sample.value, quality='measured')]
+
+        samples: Sequence[Sample] = list(history) + list(slots) + anchor
+        if any(s.value is None and s.quality == 'imputed' for s in slots):
+            self._logger.debug('imputing interior gaps')
+            samples = self._imputer.impute(samples, self._config)
+        if any(s.value is None and s.quality == 'forecast' for s in slots):
+            self._logger.debug('forecasting deadline gaps')
+            samples = self._forecaster.forecast(samples, self._config)
+
+        by_ts = {s.timestamp: s for s in samples}
+        finalized: List[Sample] = []
+        for slot in slots:
+            filled = by_ts.get(slot.timestamp)
+            if filled is None or filled.value is None:
+                raise ValueError(
+                    f'tool left grid point {slot.timestamp.isoformat()} unfilled'
+                )
+            self._logger.debug(
+                f'finalized {filled.quality} value {filled.value} at {filled.timestamp.isoformat()}'
+            )
+            finalized.append(filled)
+        return finalized
 
     def _snap_to_grid(self, ts: datetime, interval: timedelta,
             snap_func: Callable[[float], float] = round

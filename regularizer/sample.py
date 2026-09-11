@@ -11,5 +11,5 @@ Quality = typing.Literal['measured', 'imputed', 'forecast']
 class Sample:
     """A single time series sample."""
     timestamp: datetime.datetime  # timezone-aware, UTC
-    value: float
+    value: typing.Optional[float]  # None marks a hole for impute/forecast input
     quality: Quality = 'measured'

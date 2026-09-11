@@ -7,7 +7,7 @@ Real imputation methods are available separately; DummyImputer stands in for the
 from __future__ import annotations
 
 from math import nan
-from typing import Callable, Dict, Optional, Protocol, Sequence
+from typing import Callable, Dict, List, Protocol, Sequence
 
 from ..config import ChannelConfig
 from ..sample import Sample
@@ -15,34 +15,55 @@ from ..sample import Sample
 
 class Imputer(Protocol):
     """
-    Fills a single missing grid point that is bounded by measured data.
+    Fills interior holes in a sample sequence (holes bounded by a later known value).
     """
 
-    def impute(self, missing_ts, history: Sequence[Sample],
-               next_sample: Sample, config: ChannelConfig) -> float:
+    def impute(self, samples: Sequence[Sample], config: ChannelConfig) -> Sequence[Sample]:
         """
-        Returns the value for the missing grid point. `next_sample` is the measured
-        sample after the gap; earlier values come from the pre-fetched `history`.
+        Return a sequence with the same timestamps, length, and order. Known values
+        are left untouched. Interior ``None`` holes are filled with quality
+        ``'imputed'``. Trailing holes (no later non-``None``) are left as ``None``.
         """
         ...
 
 
 class DefaultImputer:
     """
-    Default imputation: last observation carried forward from the fetched
-    history, falling back to the bounding next sample, then NaN.
+    Default imputation: last observation carried forward, falling back to the next
+    known value, then NaN. Trailing holes are left unfilled.
     """
 
-    def impute(self, missing_ts, history: Sequence[Sample],
-               next_sample: Optional[Sample], config: ChannelConfig) -> float:
-        start = missing_ts - config.window
-        end = missing_ts
-        window = [s for s in history if start <= s.timestamp < end]
-        if window:
-            return window[-1].value
-        if next_sample is not None:
-            return next_sample.value
-        return nan
+    def impute(self, samples: Sequence[Sample], config: ChannelConfig) -> Sequence[Sample]:
+        n = len(samples)
+        has_right_bound = [False] * n
+        next_value: List[float | None] = [None] * n
+        seen_value = False
+        nv: float | None = None
+        for i in range(n - 1, -1, -1):
+            has_right_bound[i] = seen_value
+            next_value[i] = nv
+            if samples[i].value is not None:
+                seen_value = True
+                nv = samples[i].value
+
+        last: float | None = None
+        result: List[Sample] = []
+        for i, sample in enumerate(samples):
+            if sample.value is not None:
+                last = sample.value
+                result.append(sample)
+                continue
+            if not has_right_bound[i]:
+                result.append(sample)
+                continue
+            if last is not None:
+                fill = last
+            elif next_value[i] is not None:
+                fill = next_value[i]
+            else:
+                fill = nan
+            result.append(Sample(timestamp=sample.timestamp, value=fill, quality='imputed'))
+        return result
 
 
 IMPUTERS: Dict[str, Callable[[], Imputer]] = {

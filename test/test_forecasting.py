@@ -7,39 +7,66 @@ from regularizer.sample import Sample
 from regularizer.tools import FORECASTERS, DefaultForecaster
 
 
-def test_forecaster_uses_last_value_in_window(
+def test_forecaster_uses_last_value(
     channel_config: ChannelConfig, start_time: datetime
 ):
-    target_ts = start_time
-    history = [
-        Sample(timestamp=target_ts - timedelta(minutes=2), value=1.0),
-        Sample(timestamp=target_ts - timedelta(minutes=1), value=8.0),
-        Sample(timestamp=target_ts, value=99.0),
+    samples = [
+        Sample(timestamp=start_time - timedelta(minutes=2), value=1.0),
+        Sample(timestamp=start_time - timedelta(minutes=1), value=8.0),
+        Sample(timestamp=start_time, value=None),
     ]
 
-    value = DefaultForecaster().forecast(target_ts, history, channel_config)
+    filled = DefaultForecaster().forecast(samples, channel_config)
 
-    assert value == 8.0
+    assert [s.timestamp for s in filled] == [s.timestamp for s in samples]
+    assert filled[0].value == 1.0
+    assert filled[1].value == 8.0
+    assert filled[2].value == 8.0
+    assert filled[2].quality == 'forecast'
 
 
 def test_forecaster_returns_nan_without_history(
     channel_config: ChannelConfig, start_time: datetime
 ):
-    value = DefaultForecaster().forecast(start_time, [], channel_config)
-    assert isnan(value)
+    samples = [Sample(timestamp=start_time, value=None)]
+
+    filled = DefaultForecaster().forecast(samples, channel_config)
+
+    assert filled[0].quality == 'forecast'
+    assert isnan(filled[0].value)
 
 
-def test_forecaster_ignores_history_outside_window(
+def test_forecaster_leaves_known_values_untouched(
     channel_config: ChannelConfig, start_time: datetime
 ):
-    too_old = Sample(
-        timestamp=start_time - channel_config.window - timedelta(minutes=1),
-        value=1.0,
-    )
+    samples = [
+        Sample(timestamp=start_time, value=4.0, quality='measured'),
+        Sample(timestamp=start_time + timedelta(minutes=1), value=None),
+    ]
 
-    value = DefaultForecaster().forecast(start_time, [too_old], channel_config)
+    filled = DefaultForecaster().forecast(samples, channel_config)
 
-    assert isnan(value)
+    assert filled[0].value == 4.0
+    assert filled[0].quality == 'measured'
+    assert filled[1].value == 4.0
+    assert filled[1].quality == 'forecast'
+
+
+def test_forecaster_same_locf_across_run(
+    channel_config: ChannelConfig, start_time: datetime
+):
+    samples = [
+        Sample(timestamp=start_time, value=11.0),
+        Sample(timestamp=start_time + timedelta(minutes=1), value=None),
+        Sample(timestamp=start_time + timedelta(minutes=2), value=None),
+    ]
+
+    filled = DefaultForecaster().forecast(samples, channel_config)
+
+    assert filled[1].value == 11.0
+    assert filled[2].value == 11.0
+    assert filled[1].quality == 'forecast'
+    assert filled[2].quality == 'forecast'
 
 
 def test_forecasters_registry_default():
