@@ -1,6 +1,6 @@
 """Tests for Channel step and scheduling (Redis mocked)."""
 import threading
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -116,3 +116,32 @@ def test_next_polling_timestamp_aligns_to_epoch_plus_offset(interval):
         )
     with patch('regularizer.channel.time.time', return_value=1000.0):
         assert ch._next_polling_timestamp() == 1025.0
+
+
+def test_run_schedules_bootstrap_first_live_tick(channel):
+    first_live = datetime(2030, 1, 1, 12, 2, tzinfo=timezone.utc)
+    channel._regularizer.bootstrap_history.return_value = True
+    channel._regularizer.first_live_ts = first_live
+    channel._scheduler = MagicMock()
+
+    with patch('regularizer.channel.time.time', return_value=first_live.timestamp() - 60):
+        channel.run()
+
+    channel._scheduler.enterabs.assert_called_once_with(
+        first_live.timestamp(), 1, channel._scheduled_step
+    )
+    channel._scheduler.run.assert_called_once()
+
+
+def test_run_reschedules_when_bootstrap_overruns_first_live_tick(channel):
+    first_live = datetime(2020, 1, 1, tzinfo=timezone.utc)
+    channel._regularizer.bootstrap_history.return_value = True
+    channel._regularizer.first_live_ts = first_live
+    channel._scheduler = MagicMock()
+
+    with patch.object(channel, '_next_polling_timestamp', return_value=999.0):
+        channel.run()
+
+    channel._scheduler.enterabs.assert_called_once_with(
+        999.0, 1, channel._scheduled_step
+    )

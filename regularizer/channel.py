@@ -3,7 +3,6 @@ Worker thread tying together source, regularizer, gap filling and sink for one
 datapoint (dp_name/dp_location_code) pair.
 """
 import logging
-import math
 import redis
 import sched
 import threading
@@ -16,6 +15,7 @@ from .history import HistoryProvider
 from .io import RedisStreamSink, RedisStreamSource
 from .regularizer import TimeGridRegularizer
 from .tools import Forecaster, Imputer
+from .util import next_polling_timestamp
 
 
 class Channel(threading.Thread):
@@ -76,9 +76,17 @@ class Channel(threading.Thread):
         ):
             return
 
+        # Reuse the tick bootstrap targeted; if catch-up overran it, take the next one.
+        first_live_ts = self._regularizer.first_live_ts
+        now_epoch = time.time()
+        if first_live_ts is None or first_live_ts.timestamp() <= now_epoch:
+            first_live_epoch = self._next_polling_timestamp()
+        else:
+            first_live_epoch = first_live_ts.timestamp()
+
         # Schedule the first step.
         self._scheduler.enterabs(
-            self._next_polling_timestamp(),
+            first_live_epoch,
             1, self._scheduled_step
         )
 
@@ -124,9 +132,6 @@ class Channel(threading.Thread):
         """
         Next wall-clock tick, aligned to `epoch + k * interval_s + offset_s`.
         """
-        # Get the current time, polling interval, and offset in seconds.
-        now = time.time()
-        interval_s = self._config.polling_interval.total_seconds()
-        offset_s = self._config.offset.total_seconds()
-        # Return the next wall-clock tick aligned to epoch.
-        return (math.floor(now / interval_s) + 1) * interval_s + offset_s
+        return next_polling_timestamp(
+            time.time(), self._config.polling_interval, self._config.offset
+        )

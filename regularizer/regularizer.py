@@ -24,6 +24,7 @@ from .history import HistoryProvider, RegularizedHistoryStore
 from .io import RedisStreamSink, RedisStreamSource
 from .sample import Sample
 from .tools import Forecaster, Imputer
+from .util import next_polling_datetime
 
 
 class TimeGridRegularizer:
@@ -74,11 +75,15 @@ class TimeGridRegularizer:
         # Initialize the regularized history store.
         self._history = RegularizedHistoryStore(config.window)
 
+        # First live poll tick targeted by the latest bootstrap, if any.
+        self.first_live_ts: Optional[datetime] = None
+
     def bootstrap_history(
             self,
             sink: RedisStreamSink,
             source: RedisStreamSource,
             stop_event: threading.Event,
+            first_live_ts: Optional[datetime] = None,
         ) -> bool:
         """
         Optionally waits for the Redis source, then fetches raw DB history,
@@ -86,7 +91,8 @@ class TimeGridRegularizer:
         emissions to Redis.
 
         Returns False if startup should abort (source wait failed / stopped);
-        True otherwise.
+        True otherwise. Catch-up uses the same deadline clock as live poll
+        (``now >= grid_ts + lag_time``) through the first scheduled live tick.
         """
         hp_config = self._config.history_provider
 
@@ -103,6 +109,16 @@ class TimeGridRegularizer:
             else:
                 self._logger.info('Channel stopped before source data was available')
                 return False
+
+        # Next aligned live tick after the bootstrap delay. Always strictly after
+        # wall-clock now, so it sits about `window` ahead of bootstrap_start.
+        if first_live_ts is None:
+            first_live_ts = next_polling_datetime(
+                datetime.now(timezone.utc),
+                self._config.polling_interval,
+                self._config.offset,
+            )
+        self.first_live_ts = first_live_ts
 
         # Compute the bootstrap window.
         bootstrap_start = self._next_grid_ts - self._config.window
@@ -127,14 +143,28 @@ class TimeGridRegularizer:
         for sample in sorted(history_raw, key=lambda s: s.timestamp):
             self.add(sample)
 
+        # History bootstrap horizon length for poll(): first_live_ts - bootstrap_start.
+        # Equals window + (first_live_ts - startup_grid), so > window in normal startup.
+        catchup_interval = first_live_ts - self._next_grid_ts
+        self._logger.info(
+            f'Bootstrap catch-up until first live tick {first_live_ts.isoformat()} '
+            f'(interval={catchup_interval})'
+        )
+        # Catch-up interval is non-positive only if a caller passed a first_live_ts at
+        # or before bootstrap_start.
+        if catchup_interval <= timedelta(0):
+            self._logger.warning(f'Invalid catch-up interval: {catchup_interval}')
+            return True
+
         # Poll the regularizer. This will finalize the grid points that can be emitted.
-        if not self.poll(now=self._next_grid_ts, interval=self._config.window):
+        emitted = self.poll(now=first_live_ts, interval=catchup_interval)
+        if not emitted:
             self._logger.warning(f'No samples emitted during bootstrap')
             return True
 
-        # Emit the history samples to the sink.
-        sink.emit(self._history.samples)
-        self._logger.info(f'Bootstrap complete: {len(self._history.samples)} samples emitted')
+        # Emit the catch-up batch (in-memory history may already be trimmed to window).
+        sink.emit(emitted)
+        self._logger.info(f'Bootstrap complete: {len(emitted)} samples emitted')
         return True
 
     def add(self, sample: Sample) -> None:

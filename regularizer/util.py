@@ -1,4 +1,5 @@
 import datetime
+import math
 import re
 import redis
 import typing
@@ -38,6 +39,33 @@ def parse_duration(value: typing.Any) -> datetime.timedelta:
         return value
 
     raise ValueError(f'Invalid duration: {value!r}')
+
+
+def next_polling_timestamp(
+        now: float,
+        polling_interval: datetime.timedelta,
+        offset: datetime.timedelta = datetime.timedelta(0),
+    ) -> float:
+    """
+    Next wall-clock tick at or after ``now``, aligned to
+    ``epoch + k * polling_interval + offset``.
+    """
+    interval_s = polling_interval.total_seconds()
+    offset_s = offset.total_seconds()
+    return (math.floor(now / interval_s) + 1) * interval_s + offset_s
+
+
+def next_polling_datetime(
+        now: datetime.datetime,
+        polling_interval: datetime.timedelta,
+        offset: datetime.timedelta = datetime.timedelta(0),
+    ) -> datetime.datetime:
+    """
+    UTC datetime of the next aligned live tick at or after ``now``.
+    """
+    epoch = next_polling_timestamp(now.timestamp(), polling_interval, offset)
+    return datetime.datetime.fromtimestamp(epoch, tz=datetime.timezone.utc)
+
 
 def load_redis_connection_pool(redis_config: dict) -> redis.ConnectionPool:
     """

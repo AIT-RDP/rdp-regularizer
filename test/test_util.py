@@ -1,10 +1,15 @@
 """Tests for parse_duration and Redis connection-pool loading."""
-from datetime import timedelta
+from datetime import datetime, timedelta, timezone
 from unittest.mock import MagicMock, patch
 
 import pytest
 
-from regularizer.util import load_redis_connection_pool, parse_duration
+from regularizer.util import (
+    load_redis_connection_pool,
+    next_polling_datetime,
+    next_polling_timestamp,
+    parse_duration,
+)
 
 
 @pytest.mark.parametrize(
@@ -34,6 +39,16 @@ def test_parse_duration_passthrough_timedelta():
 def test_parse_duration_rejects_invalid(value):
     with pytest.raises(ValueError, match='Invalid duration'):
         parse_duration(value)
+
+
+def test_next_polling_timestamp_aligns_to_epoch_plus_offset():
+    assert next_polling_timestamp(1000.0, timedelta(minutes=1), timedelta(seconds=5)) == 1025.0
+
+
+def test_next_polling_datetime_is_utc_wrapper_of_timestamp():
+    now = datetime.fromtimestamp(1000.0, tz=timezone.utc)
+    got = next_polling_datetime(now, timedelta(minutes=1), timedelta(seconds=5))
+    assert got == datetime.fromtimestamp(1025.0, tz=timezone.utc)
 
 
 @patch('regularizer.util.redis.Redis')

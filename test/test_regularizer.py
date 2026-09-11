@@ -325,7 +325,9 @@ def test_bootstrap_replays_history_and_emits(
     sink = MagicMock()
     source = MagicMock()
 
-    assert reg.bootstrap_history(sink, source, threading.Event()) is True
+    assert reg.bootstrap_history(
+        sink, source, threading.Event(), first_live_ts=start_time
+    ) is True
     provider.get_history.assert_called_once()
     assert provider.get_history.call_args.args[0] == 'temp'
     sink.emit.assert_called_once()
@@ -333,6 +335,10 @@ def test_bootstrap_replays_history_and_emits(
     assert emitted[0].timestamp == bootstrap_start
     assert emitted[0].value == 3.0
     assert emitted[0].quality == 'measured'
+    assert all(s.quality == 'forecast' for s in emitted[1:])
+    assert emitted[-1].timestamp == start_time
+    assert reg._next_grid_ts == start_time + interval
+    assert reg.first_live_ts == start_time
 
 
 def test_bootstrap_aborts_when_source_unavailable(
@@ -370,6 +376,46 @@ def test_bootstrap_waits_then_continues_when_source_available(
     source.wait_until_available.return_value = True
 
     with patch('regularizer.regularizer.time.sleep') as sleep:
-        assert reg.bootstrap_history(sink, source, threading.Event()) is True
+        assert reg.bootstrap_history(
+            sink, source, threading.Event(), first_live_ts=start_time
+        ) is True
         sleep.assert_called_once_with(5.0)
     provider.get_history.assert_called_once()
+    assert reg.first_live_ts == start_time
+
+
+def test_bootstrap_forecasts_until_before_first_live_tick(
+    logger, start_time: datetime, interval: timedelta
+):
+    provider = MagicMock()
+    bootstrap_start = start_time - timedelta(hours=1)
+    provider.get_history.return_value = [
+        Sample(timestamp=bootstrap_start, value=5.0, quality='measured'),
+    ]
+    hp = HistoryProviderConfig(dp_name='temp')
+    lag = timedelta(minutes=15)
+    reg = _make_regularizer(
+        logger, start_time, interval, provider=provider, history_provider=hp,
+        lag_time=lag,
+    )
+    first_live_ts = start_time + timedelta(minutes=2)
+    sink = MagicMock()
+    source = MagicMock()
+
+    assert reg.bootstrap_history(
+        sink, source, threading.Event(), first_live_ts=first_live_ts
+    ) is True
+
+    emitted = sink.emit.call_args.args[0]
+    by_ts = {s.timestamp: s for s in emitted}
+    assert by_ts[bootstrap_start].quality == 'measured'
+    last_final = max(s.timestamp for s in emitted)
+    assert last_final + lag <= first_live_ts
+    assert last_final + interval + lag > first_live_ts
+    assert by_ts[last_final].quality == 'forecast'
+    assert start_time not in by_ts
+    assert reg._next_grid_ts == last_final + interval
+    assert reg.first_live_ts == first_live_ts
+
+    live = reg.poll(now=first_live_ts)
+    assert not any(s.timestamp in by_ts for s in live)
