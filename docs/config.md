@@ -4,6 +4,8 @@ The process loads YAML through `pyrdp_commons.cli.setup_app`. The CLI default pa
 
 Copy the example below and adjust hosts and credentials. `temperature` bootstraps from TimescaleDB; `setpoint` is live-only.
 
+`imputer` accepts `default`, `const_fill`, `linear`, `daily_naive`, `knn`, or `soft_threshold_svd`; `forecaster` accepts the same names except `linear`. The last three reshape the window into a day-by-slot matrix, so they need an `update_interval` that divides a day evenly and a `window` spanning several days.
+
 ```yaml
 version: 1
 

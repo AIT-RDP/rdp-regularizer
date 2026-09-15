@@ -10,8 +10,8 @@ Requires Python `>=3.10`.
 
 - Incoming samples snap to the nearest grid point when `|timestamp - grid| <= jitter_tolerance` (default `0.5 * update_interval`). If several samples map to the same point, the closest wins; farther ones are dropped.
 - **measured** — a snapped sample is pending for that grid point.
-- **imputed** — an interior gap: later measured data is already pending. The `default` imputer is pandas `ffill` then `bfill` through the last known value (trailing holes stay empty).
-- **forecast** — no data by the deadline `grid_time + lag_time`. The `default` forecaster is pandas `ffill` (else NaN).
+- **imputed** — an interior gap: later measured data is already pending. The `default` imputer is last observation carried forward, then next observation, through the last known value (trailing holes stay empty).
+- **forecast** — no data by the deadline `grid_time + lag_time`. The `default` forecaster repeats the last history value (else NaN).
 - Optional TimescaleDB bootstrap replays raw history into that window and publishes it to the output stream before live polling starts.
 
 ## Architecture
@@ -58,6 +58,18 @@ YAML values may use `!env-template "${VAR}"` (see [`docker/etc/regularizer/confi
 | `channels.<name>` | required: `input_stream`, `output_stream`, `polling_interval`, `update_interval`, `window` |
 | | optional: `jitter_tolerance`, `offset`, `lag_time`, `output_maxlen` (200), `data_provider_name` (`rdp-regularizer`), `imputer` / `forecaster` (`default`) |
 | `history_provider` | omit or `null` to skip bootstrap; else `dp_name` plus optional `dp_location_code`, `dp_unit`, `dp_data_provider`, `dp_device_id`, `init_when_source_available`, `bootstrap_delay` (default `10s`) |
+
+### Imputation and forecast strategies
+
+| Value | `imputer` | `forecaster` |
+|-------|-----------|--------------|
+| `default` / `const_fill` | last observation carried forward, then next observation | repeats the last history value |
+| `linear` | linear interpolation between the bounding values | not available (needs a right bound) |
+| `daily_naive` | same time of day on the nearest known day | same time of day on preceding days |
+| `knn` | distance-weighted average over the `k` most similar days | same, extrapolated past the last measurement |
+| `soft_threshold_svd` | low-rank completion of the day-by-slot matrix | same, extrapolated past the last measurement |
+
+`daily_naive`, `knn`, and `soft_threshold_svd` reshape the window into a day-by-slot matrix, so `update_interval` must divide a day evenly and `window` should span several days. With less than a day of history every column holds a single value and these strategies yield NaN.
 
 ## Redis I/O
 
