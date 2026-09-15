@@ -1,7 +1,7 @@
-from .forecasting import FORECASTERS, DefaultForecaster, Forecaster
-from .imputation import IMPUTERS, DefaultImputer, Imputer
+from .forecasting import FORECASTERS, ConstFillForecaster, Forecaster
+from .imputation import IMPUTERS, ConstFillImputer, Imputer
 
 __all__ = [
-    'FORECASTERS', 'DefaultForecaster', 'Forecaster',
-    'IMPUTERS', 'DefaultImputer', 'Imputer',
+    'FORECASTERS', 'ConstFillForecaster', 'Forecaster',
+    'IMPUTERS', 'ConstFillImputer', 'Imputer',
 ]
