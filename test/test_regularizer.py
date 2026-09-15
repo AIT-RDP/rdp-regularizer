@@ -7,7 +7,7 @@ from unittest.mock import MagicMock, patch
 from regularizer.config import ChannelConfig, HistoryProviderConfig
 from regularizer.regularizer import TimeGridRegularizer
 from regularizer.sample import Sample
-from regularizer.tools import DefaultForecaster, DefaultImputer
+from regularizer.tools import ConstFillForecaster, ConstFillImputer
 
 
 def _make_regularizer(
@@ -27,8 +27,8 @@ def _make_regularizer(
     config = ChannelConfig(**kwargs)
     reg = TimeGridRegularizer(
         config=config,
-        imputer=imputer or DefaultImputer(),
-        forecaster=forecaster or DefaultForecaster(),
+        imputer=imputer or ConstFillImputer(),
+        forecaster=forecaster or ConstFillForecaster(),
         history_provider=provider,
         logger=logger,
         start_time=start_time,
@@ -80,7 +80,7 @@ def test_jitter_beyond_tolerance_dropped(
     # With default tolerance (0.5 * interval) every timestamp is on-grid enough;
     # use a tighter tolerance so an off-grid sample is dropped.
     from regularizer.config import ChannelConfig
-    from regularizer.tools import DefaultForecaster, DefaultImputer
+    from regularizer.tools import ConstFillForecaster, ConstFillImputer
 
     config = ChannelConfig(
         name='test-jitter',
@@ -94,8 +94,8 @@ def test_jitter_beyond_tolerance_dropped(
     )
     reg = TimeGridRegularizer(
         config=config,
-        imputer=DefaultImputer(),
-        forecaster=DefaultForecaster(),
+        imputer=ConstFillImputer(),
+        forecaster=ConstFillForecaster(),
         history_provider=None,
         logger=logger,
         start_time=start_time,
@@ -278,9 +278,9 @@ def test_mixed_horizon_calls_impute_and_forecast_once(
 ):
     imputer = MagicMock()
     forecaster = MagicMock()
-    imputer.impute.side_effect = lambda samples, config: DefaultImputer().impute(samples, config)
+    imputer.impute.side_effect = lambda samples, config: ConstFillImputer().impute(samples, config)
     forecaster.forecast.side_effect = (
-        lambda samples, config: DefaultForecaster().forecast(samples, config)
+        lambda samples, config: ConstFillForecaster().forecast(samples, config)
     )
     reg = _make_regularizer(logger, start_time, interval, imputer=imputer, forecaster=forecaster)
 

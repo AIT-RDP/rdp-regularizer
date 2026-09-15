@@ -8,7 +8,7 @@ import pytest
 from regularizer.channel import Channel
 from regularizer.config import ChannelConfig
 from regularizer.sample import Sample
-from regularizer.tools import DefaultForecaster, DefaultImputer
+from regularizer.tools import ConstFillForecaster, ConstFillImputer
 
 
 @pytest.fixture
@@ -18,8 +18,8 @@ def channel(channel_config: ChannelConfig):
         ch = Channel(
             config=channel_config,
             redis_pool=MagicMock(),
-            imputer=DefaultImputer(),
-            forecaster=DefaultForecaster(),
+            imputer=ConstFillImputer(),
+            forecaster=ConstFillForecaster(),
             history_provider=None,
             stop_event=threading.Event(),
         )
@@ -35,8 +35,8 @@ def test_channel_logger_name(channel_config: ChannelConfig):
         ch = Channel(
             config=channel_config,
             redis_pool=MagicMock(),
-            imputer=DefaultImputer(),
-            forecaster=DefaultForecaster(),
+            imputer=ConstFillImputer(),
+            forecaster=ConstFillForecaster(),
             history_provider=None,
             stop_event=threading.Event(),
         )
@@ -109,8 +109,8 @@ def test_next_polling_timestamp_aligns_to_epoch_plus_offset(interval):
         ch = Channel(
             config=config,
             redis_pool=MagicMock(),
-            imputer=DefaultImputer(),
-            forecaster=DefaultForecaster(),
+            imputer=ConstFillImputer(),
+            forecaster=ConstFillForecaster(),
             history_provider=None,
             stop_event=threading.Event(),
         )
