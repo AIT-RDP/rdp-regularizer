@@ -2,9 +2,9 @@
 
 The process loads YAML through `pyrdp_commons.cli.setup_app`. The CLI default path is `config.yml` in the working directory (`python -m regularizer -c config.yml`).
 
-Copy the example below and adjust hosts and credentials. `temperature` bootstraps from TimescaleDB; `setpoint` is live-only.
+`imputer` accepts `default`, `const_fill`, `linear`, `daily_naive`, `knn`, or `soft_threshold_svd`; `forecaster` accepts the same names except `linear`, plus `chronos_bolt` and `chronos_2`. Either field may be a string name or a mapping `{name, ...}` whose other keys are constructor kwargs (`k`, `max_rank`, `shrinkage`, Chronos `model_path` / `cache_dir`). `daily_naive`, `knn`, and `soft_threshold_svd` reshape the window into a day-by-slot matrix, so they need an `update_interval` that divides a day evenly and a `window` spanning several days.
 
-`imputer` accepts `default`, `const_fill`, `linear`, `daily_naive`, `knn`, or `soft_threshold_svd`; `forecaster` accepts the same names except `linear`. The last three reshape the window into a day-by-slot matrix, so they need an `update_interval` that divides a day evenly and a `window` spanning several days.
+Copy the example below and adjust hosts and credentials. `temperature` bootstraps from TimescaleDB; `setpoint` is live-only.
 
 ```yaml
 version: 1
@@ -60,4 +60,13 @@ channels:
     jitter_tolerance: 30s
     lag_time: 10s
     offset: 0s
+```
+
+Chronos forecasters (`chronos_bolt`, `chronos_2`) are CPU-only and require `uv sync --extra chronos`. They are not part of the default. Hub weights go to mapping `cache_dir`, else `HF_HUB_CACHE`, else the Hugging Face default. `chronos_2` is univariate (no covariates). Example mapping:
+
+```yaml
+forecaster:
+  name: chronos_bolt
+  model_path: amazon/chronos-bolt-small
+  cache_dir: /var/cache/huggingface
 ```
