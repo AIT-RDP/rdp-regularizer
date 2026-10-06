@@ -99,7 +99,7 @@ class SoftThresholdSVDImputer:
         )
 
 
-IMPUTERS: Dict[str, Callable[[], Imputer]] = {
+IMPUTERS: Dict[str, Callable[..., Imputer]] = {
     'default': ConstFillImputer,
     'const_fill': ConstFillImputer,
     'linear': LinearInterpolationImputer,

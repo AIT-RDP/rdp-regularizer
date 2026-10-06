@@ -55,6 +55,17 @@ def last_valid_index(values: np.ndarray) -> int | None:
     return int(valid[-1]) if valid.size else None
 
 
+def as_numpy(values) -> np.ndarray:
+    """
+    Convert a tensor, array, or a one-item sequence of those to ``float64``.
+    """
+    if isinstance(values, (list, tuple)):
+        values = values[0]
+    if hasattr(values, 'detach'):
+        values = values.detach().cpu().numpy()
+    return np.asarray(values, dtype=np.float64)
+
+
 def nan_ffill(values: np.ndarray, axis: int = 0) -> np.ndarray:
     """Forward-fill NaNs along ``axis``. Leading NaNs are left as NaN."""
     arr = np.array(values, dtype=np.float64, copy=True)

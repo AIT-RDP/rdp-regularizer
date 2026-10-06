@@ -38,7 +38,9 @@ class ChannelConfig:
         output_maxlen: maximum length of the output stream (int, default=200)
         data_provider_name: name of the data provider (string, default='rdp-regularizer')
         imputer: imputer to use (string, default='default')
+        imputer_kwargs: constructor kwargs from an imputer mapping (dict, default empty)
         forecaster: forecaster to use (string, default='default')
+        forecaster_kwargs: constructor kwargs from a forecaster mapping (dict, default empty)
     """
     name: str
     input_stream: str
@@ -53,7 +55,9 @@ class ChannelConfig:
     output_maxlen: int = dataclasses.field(default=200)
     data_provider_name: str = dataclasses.field(default='rdp-regularizer')
     imputer: str = dataclasses.field(default='default')
+    imputer_kwargs: typing.Dict[str, typing.Any] = dataclasses.field(default_factory=dict)
     forecaster: str = dataclasses.field(default='default')
+    forecaster_kwargs: typing.Dict[str, typing.Any] = dataclasses.field(default_factory=dict)
 
     @staticmethod
     def load_channel_configs(channels: dict) -> typing.List['ChannelConfig']:
@@ -94,6 +98,19 @@ class ChannelConfig:
                     entry['offset'] = parse_duration(entry['offset'])
                 if 'lag_time' in entry:
                     entry['lag_time'] = parse_duration(entry['lag_time'])
+                # String name, or mapping {name, ...constructor kwargs}. Sibling
+                # imputer_kwargs / forecaster_kwargs keys are not a YAML form.
+                if 'imputer_kwargs' in entry or 'forecaster_kwargs' in entry:
+                    raise TypeError(
+                        'imputer/forecaster constructor args belong in a mapping '
+                        'with name, not imputer_kwargs/forecaster_kwargs'
+                    )
+                entry['imputer'], entry['imputer_kwargs'] = ChannelConfig._parse_strategy(
+                    entry.pop('imputer', 'default'), 'imputer'
+                )
+                entry['forecaster'], entry['forecaster_kwargs'] = ChannelConfig._parse_strategy(
+                    entry.pop('forecaster', 'default'), 'forecaster'
+                )
 
                 config = ChannelConfig(**entry)
             except KeyError as exc:
@@ -109,3 +126,24 @@ class ChannelConfig:
             configs.append(config)
 
         return configs
+
+    @staticmethod
+    def _parse_strategy(
+            value: typing.Any, key: str
+        ) -> typing.Tuple[str, typing.Dict[str, typing.Any]]:
+        """
+        For forecasting and imputation strategies, this function accepts a name, or a mapping with ``name`` plus constructor kwargs.
+        """
+        if value is None:
+            return 'default', {}
+        if isinstance(value, str):
+            if not value:
+                raise TypeError(f'{key} must be a non-empty string or a mapping with name')
+            return value, {}
+        if isinstance(value, dict):
+            spec = dict(value)
+            name = spec.pop('name', None)
+            if not isinstance(name, str) or not name:
+                raise TypeError(f'{key} mapping requires a string name')
+            return name, spec
+        raise TypeError(f'{key} must be a string or a mapping with name')
