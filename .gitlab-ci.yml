@@ -20,6 +20,30 @@ include:
       stage-test-image: test
       # No build arguments are needed anymore. All dependencies of the image are publicly available.
       build-args: ""
+  # Same component, separate jobs. The component bakes the Dockerfile path into one shared
+  # hidden job, so this include must keep the default Dockerfile. The cpu-torch jobs swap
+  # that file in before_script and publish under a different image name. Otherwise they
+  # would overwrite latest-dev / development-<sha> / main-<sha> of the slim image.
+  - component: "$CI_SERVER_FQDN/ees/rdp/generic-components/rdp-cicd-components/kaniko@main"
+    inputs:
+      stage-test-image: test
+      job-prefix: build-kaniko-cpu-torch
+      build-args: ""
+
+# Point the second Kaniko build at the CPU Chronos image without changing the tags the
+# component appends (latest-dev, development-<sha>, main-<sha>, latest, release tags).
+.cpu-torch-kaniko: &cpu-torch-kaniko
+  before_script:
+    - cp "$CI_PROJECT_DIR/docker/Dockerfile.cpu_torch" "$CI_PROJECT_DIR/docker/Dockerfile"
+    - export INTERNAL_REGISTRY_DOCKER_IMAGE="${CI_REGISTRY_IMAGE}/cpu-torch"
+    - export EXTERNAL_REGISTRY_DOCKER_IMAGE="${EXT_REGISTRY}/${CI_PROJECT_NAME}-cpu-torch"
+    - if [ -n "$EXT_REGISTRY_0" ]; then export EXT_REGISTRY_IMAGE_0="${EXT_REGISTRY_0}/${CI_PROJECT_NAME}-cpu-torch"; fi
+
+build-kaniko-cpu-torch-test-image:
+  <<: *cpu-torch-kaniko
+
+build-kaniko-cpu-torch-production-image:
+  <<: *cpu-torch-kaniko
 
 # =============================================================================
 # Perform the unit test
@@ -74,8 +98,10 @@ include:
   script:
     - pip install --no-cache-dir uv==${UV_VERSION}
     # Install the exact dependency set of uv.lock. All third-party dependencies are publicly available, hence no
-    # repository credentials are required anymore.
-    - uv sync --locked --all-extras
+    # repository credentials are required anymore. Optional extras (e.g. chronos) are opt-in and must be
+    # requested explicitly with --extra; they are not installed in CI or the default service image.
+    # The cpu-torch image build installs the chronos extra.
+    - uv sync --locked
     - uv run python -c "import sys; print('Testing with python', sys.version)"
     # Test the code. The import paths are configured via [tool.pytest.ini_options] in pyproject.toml.
     - uv run pytest ${PYTEST_COVERAGE_ARGS} --junitxml=report.xml --log-cli-level=INFO test
