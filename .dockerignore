@@ -1,5 +1,5 @@
 # Keep the build context small. Only pyproject.toml, uv.lock, regularizer/ and docker/etc/ are actually copied
-# into the image by docker/Dockerfile.
+# into the image by docker/Dockerfile and docker/Dockerfile.cpu.
 
 # Local environments and caches
 .venv/
@@ -32,6 +32,15 @@ dist/
 htmlcov/
 coverage.xml
 report.xml
+
+# Model weights and checkpoints are loaded at runtime, not baked into the image
+*.pt
+*.pth
+*.ckpt
+*.safetensors
+*.onnx
+*.bin
+checkpoints/
 
 # Documentation, examples and test data are not part of the runtime image
 docs/

@@ -1,0 +1,53 @@
+# CPU-only Chronos image. Torch is the locked +cpu wheel from
+# https://download.pytorch.org/whl/cpu (see [tool.uv.sources] in pyproject.toml).
+ARG DOCKER_PROXY_PREFIX
+FROM ${DOCKER_PROXY_PREFIX}python:3.10-slim AS builder
+
+COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
+
+WORKDIR /app
+
+ENV UV_LINK_MODE=copy \
+    UV_NO_CACHE=1
+
+# libgomp1 is required to import torch. binutils provides strip for the torch
+# libraries; it is not copied into the runtime image.
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends binutils git libgomp1 \
+    && rm -rf /var/lib/apt/lists/*
+
+RUN touch README.md
+COPY uv.lock pyproject.toml ./
+
+# One frozen install. The lock pins torch to the CPU index, so PyPI cannot
+# replace it with the CUDA build. prune_cpu_torch.py drops headers, tests,
+# bytecode, and the ONNX package. strip is limited to torch/lib: stripping
+# NumPy's OpenBLAS library makes it fail to load.
+RUN uv sync --frozen --no-install-project --no-dev --extra chronos
+COPY docker/prune_cpu_torch.py docker/check_cpu_torch.py ./
+RUN /app/.venv/bin/python /app/prune_cpu_torch.py \
+    && find /app/.venv -path '*/torch/lib/*.so' -type f -exec strip --strip-unneeded {} + \
+    && /app/.venv/bin/python /app/check_cpu_torch.py
+
+FROM ${DOCKER_PROXY_PREFIX}python:3.10-slim
+
+WORKDIR /app
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PATH="/app/.venv/bin:$PATH" \
+    REGULARIZER_CONFIG="/etc/regularizer/config.yml" \
+    REGULARIZER_ENV="/etc/regularizer/default.env" \
+    HF_HUB_CACHE="/var/cache/huggingface"
+
+# libgomp1 is the runtime library the CPU torch wheel links against.
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends libgomp1 \
+    && rm -rf /var/lib/apt/lists/* \
+    && mkdir -p /var/cache/huggingface
+
+COPY --from=builder /app/.venv /app/.venv
+COPY docker/etc/regularizer /etc/regularizer
+COPY regularizer ./regularizer
+
+CMD ["python", "-m", "regularizer"]
