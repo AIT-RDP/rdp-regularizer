@@ -204,9 +204,12 @@ def test_create_forecaster_unknown_name_raises():
         create_forecaster('nope')
 
 
-def test_create_forecaster_invalid_kwargs_raises():
-    with pytest.raises(RuntimeError, match='Invalid forecaster config'):
-        create_forecaster('chronos_bolt', {'bogus': 1})
+def test_create_forecaster_unknown_kwargs_warns(monkeypatch):
+    logged = []
+    monkeypatch.setattr('regularizer.tools.chronos.LOGGER.warning', logged.append)
+    forecaster = create_forecaster('chronos_bolt', {'bogus': 1})
+    assert isinstance(forecaster, ChronosBoltForecaster)
+    assert logged == ["ChronosForecasterBase unknown kwargs: {'bogus': 1}"]
 
 
 @pytest.mark.parametrize('forecaster_cls', CHRONOS_CLASSES)
