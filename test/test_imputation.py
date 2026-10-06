@@ -6,7 +6,7 @@ import pytest
 
 from regularizer.config import ChannelConfig
 from regularizer.sample import Sample
-from regularizer.tools import IMPUTERS, ConstFillImputer
+from regularizer.tools import IMPUTERS, ConstFillImputer, create_imputer
 from regularizer.tools.imputation import DailyNaiveImputer, KNNImputer, LinearInterpolationImputer, SoftThresholdSVDImputer
 from regularizer.tools.util import samples_to_array
 
@@ -90,6 +90,22 @@ def test_imputer_same_locf_across_run(channel_config: ChannelConfig, start_time:
 
 def test_imputers_registry_default():
     assert isinstance(IMPUTERS['default'](), ConstFillImputer)
+
+
+def test_create_imputer_passes_kwargs():
+    imputer = create_imputer('knn', {'k': 7})
+    assert isinstance(imputer, KNNImputer)
+    assert imputer.k == 7
+
+
+def test_create_imputer_unknown_name_raises():
+    with pytest.raises(RuntimeError, match='Unknown imputer'):
+        create_imputer('nope')
+
+
+def test_create_imputer_invalid_kwargs_raises():
+    with pytest.raises(RuntimeError, match='Invalid imputer config'):
+        create_imputer('knn', {'bogus': 1})
 
 
 @pytest.mark.parametrize(

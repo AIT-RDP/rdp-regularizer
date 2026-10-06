@@ -49,7 +49,9 @@ def test_required_fields_and_default_jitter_tolerance():
     assert config.lag_time == timedelta(0)
     assert config.output_maxlen == 200
     assert config.imputer == 'default'
+    assert config.imputer_kwargs == {}
     assert config.forecaster == 'default'
+    assert config.forecaster_kwargs == {}
 
 
 def test_explicit_optional_fields_are_parsed():
@@ -68,7 +70,9 @@ def test_explicit_optional_fields_are_parsed():
     assert config.lag_time == timedelta(seconds=2)
     assert config.output_maxlen == 50
     assert config.imputer == 'default'
+    assert config.imputer_kwargs == {}
     assert config.forecaster == 'default'
+    assert config.forecaster_kwargs == {}
 
 
 @pytest.mark.parametrize('channels', [{}, None])
@@ -117,4 +121,53 @@ def test_invalid_history_provider_raises():
     with pytest.raises(RuntimeError, match='Invalid history provider config'):
         ChannelConfig.load_channel_configs({
             'ch': _channel_entry(history_provider={'dp_location_code': 'loc'}),
+        })
+
+
+def test_strategy_mapping_parses_name_and_kwargs():
+    config = ChannelConfig.load_channel_configs({
+        'ch': _channel_entry(
+            imputer={'name': 'knn', 'k': 3},
+            forecaster={
+                'name': 'chronos_bolt',
+                'model_path': 'amazon/chronos-bolt-small',
+                'cache_dir': '/cache',
+            },
+        ),
+    })[0]
+    assert config.imputer == 'knn'
+    assert config.imputer_kwargs == {'k': 3}
+    assert config.forecaster == 'chronos_bolt'
+    assert config.forecaster_kwargs == {
+        'model_path': 'amazon/chronos-bolt-small',
+        'cache_dir': '/cache',
+    }
+
+
+def test_strategy_mapping_name_only():
+    config = ChannelConfig.load_channel_configs({
+        'ch': _channel_entry(forecaster={'name': 'chronos_2'}),
+    })[0]
+    assert config.forecaster == 'chronos_2'
+    assert config.forecaster_kwargs == {}
+
+
+def test_strategy_mapping_requires_name():
+    with pytest.raises(RuntimeError, match='Invalid channel config'):
+        ChannelConfig.load_channel_configs({
+            'ch': _channel_entry(forecaster={'cache_dir': '/cache'}),
+        })
+
+
+def test_strategy_must_be_string_or_mapping():
+    with pytest.raises(RuntimeError, match='Invalid channel config'):
+        ChannelConfig.load_channel_configs({
+            'ch': _channel_entry(forecaster=['chronos_bolt']),
+        })
+
+
+def test_sibling_strategy_kwargs_rejected():
+    with pytest.raises(RuntimeError, match='Invalid channel config'):
+        ChannelConfig.load_channel_configs({
+            'ch': _channel_entry(forecaster='chronos_bolt', forecaster_kwargs={'cache_dir': '/x'}),
         })
