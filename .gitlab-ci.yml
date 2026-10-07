@@ -20,30 +20,16 @@ include:
       stage-test-image: test
       # No build arguments are needed anymore. All dependencies of the image are publicly available.
       build-args: ""
-  # Same component, separate jobs. The component bakes the Dockerfile path into one shared
-  # hidden job, so this include must keep the default Dockerfile. The cpu-torch jobs swap
-  # that file in before_script and publish under a different image name. Otherwise they
-  # would overwrite latest-dev / development-<sha> / main-<sha> of the slim image.
+  # Separate jobs. image-tag makes the production job push only :cpu-torch, so it does not
+  # replace latest-dev or development-<sha>. Feature-branch builds keep the component's
+  # branch tags and stay internal.
   - component: "$CI_SERVER_FQDN/ees/rdp/generic-components/rdp-cicd-components/kaniko@main"
     inputs:
       stage-test-image: test
       job-prefix: build-kaniko-cpu-torch
       build-args: ""
-
-# Point the second Kaniko build at the CPU Chronos image without changing the tags the
-# component appends (latest-dev, development-<sha>, main-<sha>, latest, release tags).
-.cpu-torch-kaniko: &cpu-torch-kaniko
-  before_script:
-    - cp "$CI_PROJECT_DIR/docker/Dockerfile.cpu_torch" "$CI_PROJECT_DIR/docker/Dockerfile"
-    - export INTERNAL_REGISTRY_DOCKER_IMAGE="${CI_REGISTRY_IMAGE}/cpu-torch"
-    - export EXTERNAL_REGISTRY_DOCKER_IMAGE="${EXT_REGISTRY}/${CI_PROJECT_NAME}-cpu-torch"
-    - if [ -n "$EXT_REGISTRY_0" ]; then export EXT_REGISTRY_IMAGE_0="${EXT_REGISTRY_0}/${CI_PROJECT_NAME}-cpu-torch"; fi
-
-build-kaniko-cpu-torch-test-image:
-  <<: *cpu-torch-kaniko
-
-build-kaniko-cpu-torch-production-image:
-  <<: *cpu-torch-kaniko
+      dockerfile: "$CI_PROJECT_DIR/docker/Dockerfile.cpu_torch"
+      image-tag: cpu-torch
 
 # =============================================================================
 # Perform the unit test
