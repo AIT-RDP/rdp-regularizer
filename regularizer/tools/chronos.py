@@ -10,7 +10,7 @@ import threading
 from ..sample import Sample
 from ..config import ChannelConfig
 from ..logger import LOGGER
-from .util import array_to_samples, last_valid_index, nan_bfill, nan_ffill, samples_to_array
+from .util import array_to_samples, last_valid_index, nan_bfill, nan_ffill, samples_to_array, warn_unknown_kwargs
 
 
 class _ChronosPredict(Protocol):
@@ -34,7 +34,7 @@ class ChronosForecasterBase(abc.ABC):
     def __init__(
             self, model_path: Optional[str] = None, cache_dir: Optional[str] = None, **kwargs: Any
         ):
-        LOGGER.warning(f'ChronosForecasterBase unknown kwargs: {kwargs}')
+        warn_unknown_kwargs('ChronosForecasterBase', kwargs)
         self.model_path = model_path or self._default_model_path
         self.cache_dir = ChronosForecasterBase._get_weights_cache_dir(cache_dir)
         self._pipeline = None  # loaded on first predict; constructor stays extra-free

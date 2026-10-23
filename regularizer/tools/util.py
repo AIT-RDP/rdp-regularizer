@@ -2,11 +2,22 @@ from __future__ import annotations
 
 from datetime import timedelta
 from math import ceil, nan
-from typing import Callable, List, Sequence
+from typing import Any, Callable, List, Mapping, Sequence
 
 import numpy as np
 
+from ..logger import LOGGER
 from ..sample import Quality, Sample
+
+
+def warn_unknown_kwargs(owner: str, kwargs: Mapping[str, Any]) -> None:
+    """
+    Log constructor keys ``owner`` does not accept.
+
+    An empty mapping is the normal case (no extra config), so it stays silent.
+    """
+    if kwargs:
+        LOGGER.warning(f'{owner} unknown kwargs: {kwargs}')
 
 
 def samples_to_array(samples: Sequence[Sample]) -> np.ndarray:

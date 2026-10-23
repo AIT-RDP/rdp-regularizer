@@ -206,10 +206,18 @@ def test_create_forecaster_unknown_name_raises():
 
 def test_create_forecaster_unknown_kwargs_warns(monkeypatch):
     logged = []
-    monkeypatch.setattr('regularizer.tools.chronos.LOGGER.warning', logged.append)
+    monkeypatch.setattr('regularizer.tools.util.LOGGER.warning', logged.append)
     forecaster = create_forecaster('chronos_bolt', {'bogus': 1})
     assert isinstance(forecaster, ChronosBoltForecaster)
     assert logged == ["ChronosForecasterBase unknown kwargs: {'bogus': 1}"]
+
+
+def test_create_forecaster_empty_kwargs_silent(monkeypatch):
+    logged = []
+    monkeypatch.setattr('regularizer.tools.util.LOGGER.warning', logged.append)
+    for name in ('const_fill', 'daily_naive', 'knn', 'soft_threshold_svd', 'chronos_bolt', 'chronos_2'):
+        create_forecaster(name, {})
+    assert logged == []
 
 
 @pytest.mark.parametrize('forecaster_cls', CHRONOS_CLASSES)

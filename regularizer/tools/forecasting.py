@@ -9,11 +9,10 @@ from typing import Any, Callable, Dict, Optional, Protocol, Sequence
 import numpy as np
 
 from ..config import ChannelConfig
-from ..logger import LOGGER
 from ..sample import Sample
 from .algo import daily_naive_reconstruct, knn_reconstruct, soft_threshold_svd_reconstruct
 from .chronos import ChronosForecasterBase
-from .util import array_to_samples, as_numpy, matrix_fill, nan_ffill, samples_to_array
+from .util import array_to_samples, as_numpy, matrix_fill, nan_ffill, samples_to_array, warn_unknown_kwargs
 
 
 class Forecaster(Protocol):
@@ -35,7 +34,7 @@ class ConstFillForecaster:
     Naive forecast: ffill last observation, NaN when none.
     """
     def __init__(self, **kwargs: Any):
-        LOGGER.warning(f'ConstFillForecaster unknown kwargs: {kwargs}')
+        warn_unknown_kwargs('ConstFillForecaster', kwargs)
 
     def forecast(self, samples: Sequence[Sample], config: ChannelConfig) -> Sequence[Sample]:
         values = nan_ffill(samples_to_array(samples))
@@ -47,7 +46,7 @@ class DailyNaiveForecaster:
     Forecast using daily naive approach.
     """
     def __init__(self, **kwargs: Any):
-        LOGGER.warning(f'DailyNaiveForecaster unknown kwargs: {kwargs}')
+        warn_unknown_kwargs('DailyNaiveForecaster', kwargs)
 
     def forecast(self, samples: Sequence[Sample], config: ChannelConfig) -> Sequence[Sample]:
         return matrix_fill(
@@ -61,7 +60,7 @@ class KNNForecaster:
     Forecast using KNN.
     """
     def __init__(self, k: int = 5, **kwargs: Any):
-        LOGGER.warning(f'KNNForecaster unknown kwargs: {kwargs}')
+        warn_unknown_kwargs('KNNForecaster', kwargs)
         self.k = k
 
     def forecast(self, samples: Sequence[Sample], config: ChannelConfig) -> Sequence[Sample]:
@@ -76,7 +75,7 @@ class SoftThresholdSVDForecaster:
     Forecast using soft-thresholded SVD.
     """
     def __init__(self, max_rank: int = 3, shrinkage: Optional[float] = None, **kwargs: Any):
-        LOGGER.warning(f'SoftThresholdSVDForecaster unknown kwargs: {kwargs}')
+        warn_unknown_kwargs('SoftThresholdSVDForecaster', kwargs)
         self.max_rank = max_rank
         self.shrinkage = shrinkage
 

@@ -4,12 +4,15 @@ data has already arrived, i.e. the gap is bounded by real data on both sides.
 """
 from __future__ import annotations
 
-from typing import Callable, Dict, Optional, Protocol, Sequence
+from typing import Any, Callable, Dict, Optional, Protocol, Sequence
 
 from ..config import ChannelConfig
 from ..sample import Sample
 from .algo import daily_naive_reconstruct, knn_reconstruct, linear_interpolation, soft_threshold_svd_reconstruct
-from .util import array_to_samples, last_valid_index, matrix_fill, nan_bfill, nan_ffill, samples_to_array
+from .util import (
+    array_to_samples, last_valid_index, matrix_fill, nan_bfill, nan_ffill,
+    samples_to_array, warn_unknown_kwargs,
+)
 
 
 class Imputer(Protocol):
@@ -32,6 +35,9 @@ class ConstFillImputer:
     Trailing holes are left unfilled.
     """
 
+    def __init__(self, **kwargs: Any):
+        warn_unknown_kwargs('ConstFillImputer', kwargs)
+
     def impute(self, samples: Sequence[Sample], config: ChannelConfig) -> Sequence[Sample]:
         values = samples_to_array(samples)
         last = last_valid_index(values)
@@ -48,6 +54,9 @@ class LinearInterpolationImputer:
     Imputation using linear interpolation.
     """
 
+    def __init__(self, **kwargs: Any):
+        warn_unknown_kwargs('LinearInterpolationImputer', kwargs)
+
     def impute(self, samples: Sequence[Sample], config: ChannelConfig) -> Sequence[Sample]:
         values = samples_to_array(samples)
         return array_to_samples(
@@ -60,6 +69,10 @@ class DailyNaiveImputer:
     """
     Imputation using daily naive approach.
     """
+
+    def __init__(self, **kwargs: Any):
+        warn_unknown_kwargs('DailyNaiveImputer', kwargs)
+
     def impute(self, samples: Sequence[Sample], config: ChannelConfig) -> Sequence[Sample]:
         return matrix_fill(
             samples, config.update_interval, 'imputed',
@@ -71,7 +84,8 @@ class KNNImputer:
     """
     Imputation using KNN.
     """
-    def __init__(self, k: int = 5):
+    def __init__(self, k: int = 5, **kwargs: Any):
+        warn_unknown_kwargs('KNNImputer', kwargs)
         self.k = k
 
     def impute(self, samples: Sequence[Sample], config: ChannelConfig) -> Sequence[Sample]:
@@ -86,7 +100,8 @@ class SoftThresholdSVDImputer:
     Imputation using soft-thresholded SVD.
     """
 
-    def __init__(self, max_rank: int = 3, shrinkage: Optional[float] = None):
+    def __init__(self, max_rank: int = 3, shrinkage: Optional[float] = None, **kwargs: Any):
+        warn_unknown_kwargs('SoftThresholdSVDImputer', kwargs)
         self.max_rank = max_rank
         self.shrinkage = shrinkage
 

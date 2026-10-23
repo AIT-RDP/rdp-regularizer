@@ -103,9 +103,20 @@ def test_create_imputer_unknown_name_raises():
         create_imputer('nope')
 
 
-def test_create_imputer_invalid_kwargs_raises():
-    with pytest.raises(RuntimeError, match='Invalid imputer config'):
-        create_imputer('knn', {'bogus': 1})
+def test_create_imputer_unknown_kwargs_warns(monkeypatch):
+    logged = []
+    monkeypatch.setattr('regularizer.tools.util.LOGGER.warning', logged.append)
+    imputer = create_imputer('knn', {'bogus': 1})
+    assert isinstance(imputer, KNNImputer)
+    assert logged == ["KNNImputer unknown kwargs: {'bogus': 1}"]
+
+
+def test_create_imputer_empty_kwargs_silent(monkeypatch):
+    logged = []
+    monkeypatch.setattr('regularizer.tools.util.LOGGER.warning', logged.append)
+    for name in ('const_fill', 'linear', 'daily_naive', 'knn', 'soft_threshold_svd'):
+        create_imputer(name, {})
+    assert logged == []
 
 
 @pytest.mark.parametrize(
