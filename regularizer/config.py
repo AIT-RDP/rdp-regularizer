@@ -5,6 +5,7 @@ import dataclasses
 import datetime
 import typing
 
+from .logger import LOGGER
 from .util import parse_duration
 
 @dataclasses.dataclass(frozen=True)
@@ -113,6 +114,7 @@ class ChannelConfig:
                 )
 
                 config = ChannelConfig(**entry)
+                ChannelConfig._warn_unless_frontier_on_grid(config)
             except KeyError as exc:
                 raise RuntimeError(
                     f'Missing config field for channel {channel_key}: {exc}'
@@ -147,3 +149,20 @@ class ChannelConfig:
                 raise TypeError(f'{key} mapping requires a string name')
             return name, spec
         raise TypeError(f'{key} must be a string or a mapping with name')
+
+    @staticmethod
+    def _warn_unless_frontier_on_grid(config: 'ChannelConfig') -> None:
+        """
+        The frontier starts at ``floor(start, polling_interval) - lag_time`` and is
+        then stepped by ``update_interval``. It stays on the measurement grid only
+        when ``update_interval`` divides both ``polling_interval`` and ``lag_time``.
+        """
+        if config.update_interval <= datetime.timedelta(0):
+            return
+        for key in ('polling_interval', 'lag_time'):
+            value = getattr(config, key)
+            if value % config.update_interval != datetime.timedelta(0):
+                LOGGER.warning(
+                    f'Channel {config.name}: update_interval ({config.update_interval}) '
+                    f'does not divide {key} ({value})'
+                )

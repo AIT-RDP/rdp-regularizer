@@ -171,3 +171,46 @@ def test_sibling_strategy_kwargs_rejected():
         ChannelConfig.load_channel_configs({
             'ch': _channel_entry(forecaster='chronos_bolt', forecaster_kwargs={'cache_dir': '/x'}),
         })
+
+
+def test_warns_when_update_interval_does_not_divide_polling_interval(monkeypatch):
+    logged = []
+    monkeypatch.setattr('regularizer.config.LOGGER.warning', logged.append)
+    ChannelConfig.load_channel_configs({
+        'ch': _channel_entry(polling_interval='5s', update_interval='2s'),
+    })
+    assert logged == [
+        'Channel ch: update_interval (0:00:02) does not divide polling_interval (0:00:05)'
+    ]
+
+
+def test_warns_when_update_interval_does_not_divide_lag_time(monkeypatch):
+    logged = []
+    monkeypatch.setattr('regularizer.config.LOGGER.warning', logged.append)
+    ChannelConfig.load_channel_configs({
+        'ch': _channel_entry(polling_interval='4s', update_interval='2s', lag_time='5s'),
+    })
+    assert logged == [
+        'Channel ch: update_interval (0:00:02) does not divide lag_time (0:00:05)'
+    ]
+
+
+def test_warns_for_both_polling_interval_and_lag_time(monkeypatch):
+    logged = []
+    monkeypatch.setattr('regularizer.config.LOGGER.warning', logged.append)
+    ChannelConfig.load_channel_configs({
+        'ch': _channel_entry(polling_interval='5s', update_interval='2s', lag_time='5s'),
+    })
+    assert logged == [
+        'Channel ch: update_interval (0:00:02) does not divide polling_interval (0:00:05)',
+        'Channel ch: update_interval (0:00:02) does not divide lag_time (0:00:05)',
+    ]
+
+
+def test_no_warning_when_update_interval_divides_polling_interval_and_lag_time(monkeypatch):
+    logged = []
+    monkeypatch.setattr('regularizer.config.LOGGER.warning', logged.append)
+    ChannelConfig.load_channel_configs({
+        'sensor': _channel_entry(polling_interval='5s', update_interval='1s', lag_time='5s'),
+    })
+    assert logged == []
