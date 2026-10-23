@@ -44,7 +44,7 @@ def main(config, env):
     # Read config file.
     config_file_path = pathlib.Path(config).resolve(strict=True)
     config = pyrdp_commons.cli.setup_app(config_file=str(config_file_path), env_file=env)
-    LOGGER.warning(f'Config: {config}')
+    LOGGER.info(f'Config: {config}')
 
     # Redis config.
     redis_config = config['redis']
