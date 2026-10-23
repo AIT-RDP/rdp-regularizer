@@ -4,10 +4,12 @@ data has already arrived, i.e. the gap is bounded by real data on both sides.
 """
 from __future__ import annotations
 
+from datetime import timedelta
 from typing import Any, Callable, Dict, Optional, Protocol, Sequence
 
 from ..config import ChannelConfig
 from ..sample import Sample
+from ..util import parse_duration
 from .algo import daily_naive_reconstruct, knn_reconstruct, linear_interpolation, soft_threshold_svd_reconstruct
 from .util import (
     array_to_samples, last_valid_index, matrix_fill, nan_bfill, nan_ffill,
@@ -67,50 +69,57 @@ class LinearInterpolationImputer:
 
 class DailyNaiveImputer:
     """
-    Imputation using daily naive approach.
+    Imputation using the naive period profile. ``period`` defaults to one day.
     """
 
-    def __init__(self, **kwargs: Any):
+    def __init__(self, period: Any = timedelta(days=1), **kwargs: Any):
         warn_unknown_kwargs('DailyNaiveImputer', kwargs)
+        self.period = parse_duration(period)
 
     def impute(self, samples: Sequence[Sample], config: ChannelConfig) -> Sequence[Sample]:
         return matrix_fill(
             samples, config.update_interval, 'imputed',
-            daily_naive_reconstruct, interior_only=True
+            daily_naive_reconstruct, interior_only=True, period=self.period
         )
 
 
 class KNNImputer:
     """
-    Imputation using KNN.
+    Imputation using KNN. ``period`` defaults to one day.
     """
-    def __init__(self, k: int = 5, **kwargs: Any):
+    def __init__(self, k: int = 5, period: Any = timedelta(days=1), **kwargs: Any):
         warn_unknown_kwargs('KNNImputer', kwargs)
         self.k = k
+        self.period = parse_duration(period)
 
     def impute(self, samples: Sequence[Sample], config: ChannelConfig) -> Sequence[Sample]:
         return matrix_fill(
             samples, config.update_interval, 'imputed',
-            lambda M: knn_reconstruct(M, k=self.k), interior_only=True
+            lambda M: knn_reconstruct(M, k=self.k),
+            interior_only=True, period=self.period
         )
 
 
 class SoftThresholdSVDImputer:
     """
-    Imputation using soft-thresholded SVD.
+    Imputation using soft-thresholded SVD. ``period`` defaults to one day.
     """
 
-    def __init__(self, max_rank: int = 3, shrinkage: Optional[float] = None, **kwargs: Any):
+    def __init__(
+            self, max_rank: int = 3, shrinkage: Optional[float] = None,
+            period: Any = timedelta(days=1), **kwargs: Any
+        ):
         warn_unknown_kwargs('SoftThresholdSVDImputer', kwargs)
         self.max_rank = max_rank
         self.shrinkage = shrinkage
+        self.period = parse_duration(period)
 
     def impute(self, samples: Sequence[Sample], config: ChannelConfig) -> Sequence[Sample]:
         return matrix_fill(
             samples, config.update_interval, 'imputed',
             lambda M: soft_threshold_svd_reconstruct(
                 M, max_rank=self.max_rank, shrinkage=self.shrinkage
-            ), interior_only=True
+            ), interior_only=True, period=self.period
         )
 
 

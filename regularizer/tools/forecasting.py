@@ -4,12 +4,14 @@ any measured sample arriving: the channel must emit anyway to stay strictly regu
 so the value is extrapolated from history only.
 """
 from __future__ import annotations
+from datetime import timedelta
 from typing import Any, Callable, Dict, Optional, Protocol, Sequence
 
 import numpy as np
 
 from ..config import ChannelConfig
 from ..sample import Sample
+from ..util import parse_duration
 from .algo import daily_naive_reconstruct, knn_reconstruct, soft_threshold_svd_reconstruct
 from .chronos import ChronosForecasterBase
 from .util import array_to_samples, as_numpy, matrix_fill, nan_ffill, samples_to_array, warn_unknown_kwargs
@@ -43,48 +45,54 @@ class ConstFillForecaster:
 
 class DailyNaiveForecaster:
     """
-    Forecast using daily naive approach.
+    Forecast using the naive period profile. ``period`` defaults to one day.
     """
-    def __init__(self, **kwargs: Any):
+    def __init__(self, period: Any = timedelta(days=1), **kwargs: Any):
         warn_unknown_kwargs('DailyNaiveForecaster', kwargs)
+        self.period = parse_duration(period)
 
     def forecast(self, samples: Sequence[Sample], config: ChannelConfig) -> Sequence[Sample]:
         return matrix_fill(
             samples, config.update_interval, 'forecast',
-            daily_naive_reconstruct
+            daily_naive_reconstruct, period=self.period
         )
 
 
 class KNNForecaster:
     """
-    Forecast using KNN.
+    Forecast using KNN. ``period`` defaults to one day.
     """
-    def __init__(self, k: int = 5, **kwargs: Any):
+    def __init__(self, k: int = 5, period: Any = timedelta(days=1), **kwargs: Any):
         warn_unknown_kwargs('KNNForecaster', kwargs)
         self.k = k
+        self.period = parse_duration(period)
 
     def forecast(self, samples: Sequence[Sample], config: ChannelConfig) -> Sequence[Sample]:
         return matrix_fill(
             samples, config.update_interval, 'forecast',
-            lambda M: knn_reconstruct(M, k=self.k)
+            lambda M: knn_reconstruct(M, k=self.k), period=self.period
         )
 
 
 class SoftThresholdSVDForecaster:
     """
-    Forecast using soft-thresholded SVD.
+    Forecast using soft-thresholded SVD. ``period`` defaults to one day.
     """
-    def __init__(self, max_rank: int = 3, shrinkage: Optional[float] = None, **kwargs: Any):
+    def __init__(
+            self, max_rank: int = 3, shrinkage: Optional[float] = None,
+            period: Any = timedelta(days=1), **kwargs: Any
+        ):
         warn_unknown_kwargs('SoftThresholdSVDForecaster', kwargs)
         self.max_rank = max_rank
         self.shrinkage = shrinkage
+        self.period = parse_duration(period)
 
     def forecast(self, samples: Sequence[Sample], config: ChannelConfig) -> Sequence[Sample]:
         return matrix_fill(
             samples, config.update_interval, 'forecast',
             lambda M: soft_threshold_svd_reconstruct(
                 M, max_rank=self.max_rank, shrinkage=self.shrinkage
-            )
+            ), period=self.period
         )
 
 

@@ -103,17 +103,18 @@ def nan_bfill(values: np.ndarray, axis: int = 0) -> np.ndarray:
     return np.flip(nan_ffill(np.flip(arr, axis=axis), axis=axis), axis=axis)
 
 
-def slots_per_day(interval: timedelta) -> int:
+def slots_per_period(interval: timedelta, period: timedelta) -> int:
     """
-    Number of grid slots in a 24-hour day for ``interval``.
+    Number of grid slots in ``period`` for ``interval``.
 
-    Raises ``ValueError`` if ``interval`` is not positive or does not divide a
-    day evenly.
+    Raises ``ValueError`` if ``interval`` or ``period`` is not positive, or if
+    ``interval`` does not divide ``period`` evenly.
     """
-    day = timedelta(days=1)
-    if interval <= timedelta(0) or day % interval:
-        raise ValueError(f'update interval {interval} does not divide a day evenly')
-    return int(day / interval)
+    if interval <= timedelta(0) or period <= timedelta(0) or period % interval:
+        raise ValueError(
+            f'update interval {interval} does not divide period {period} evenly'
+        )
+    return int(period / interval)
 
 
 def matrix_fill(
@@ -122,9 +123,13 @@ def matrix_fill(
         quality: Quality,
         reconstruct: Callable[[np.ndarray], np.ndarray],
         interior_only: bool = False,
+        period: timedelta = timedelta(days=1),
     ) -> List[Sample]:
     """
     Shared pipeline for matrix filling: normalize -> reconstruct(matrix) -> invert + clip
+
+    Samples are reshaped into rows of ``period`` (default one day). ``interval``
+    must be positive and divide ``period`` evenly.
 
     With ``interior_only`` the pipeline stops at the last known value and trailing
     holes are returned untouched, so that a forecaster can still claim them.
@@ -136,14 +141,14 @@ def matrix_fill(
             return list(samples)
         samples, trailing = samples[: last + 1], list(samples[last + 1:])
 
-    n_slots = slots_per_day(interval)
+    n_slots = slots_per_period(interval, period)
     n = len(samples)
     if n == 0:
         return []
 
     # Pad the samples with NaNs to the nearest multiple of n_slots
-    n_days = ceil(n / n_slots)
-    padded = np.full(n_days * n_slots, np.nan, dtype=np.float64)
+    n_rows = ceil(n / n_slots)
+    padded = np.full(n_rows * n_slots, np.nan, dtype=np.float64)
     padded[:n] = samples_to_array(samples)
 
     # Create a mask of the NaNs in the padded array
@@ -156,14 +161,14 @@ def matrix_fill(
     # Positive-only -> impute in log space (avoids negative-spike overshoot)
     src = np.log1p(padded) if positive else padded
 
-    # Reshape the source array into a matrix of shape (n_days, n_slots)
-    M = src.reshape(n_days, n_slots)
+    # Reshape the source array into a matrix of shape (n_rows, n_slots)
+    M = src.reshape(n_rows, n_slots)
 
     mu = np.nanmean(M, axis=0)
     sd = np.nanstd(M, axis=0)
     # Guard constant columns
     sd = np.where(sd == 0, 1.0, sd)
-    # Normalize each time-of-day column
+    # Normalize each column (same offset within the period)
     Mn = (M - mu) / sd
 
     # Apply the reconstruction function to the normalized matrix
