@@ -24,7 +24,7 @@ Each scheduled tick runs `Channel._step`:
 
 ![Channel._step: read drains Redis backlog; add snaps samples to the grid; poll finalizes measured, imputed, or forecast points; emit writes one Redis output entry](docs/channel-step.svg)
 
-Polling is aligned to `epoch + k * polling_interval + offset`.
+Polling is aligned to `epoch + k * polling_interval + offset`. `update_interval` has to divide both `polling_interval` and `lag_time`; see [Update interval, polling interval and lag time](#update-interval-polling-interval-and-lag-time).
 
 ## Package layout
 
@@ -58,6 +58,22 @@ YAML values may use `!env-template "${VAR}"` (see [`docker/etc/regularizer/confi
 | `channels.<name>` | required: `input_stream`, `output_stream`, `polling_interval`, `update_interval`, `window` |
 | | optional: `jitter_tolerance`, `offset`, `lag_time`, `output_maxlen` (200), `data_provider_name` (`rdp-regularizer`), `imputer` / `forecaster` (`default`; string name or mapping `{name, ...}`) |
 | `history_provider` | omit or `null` to skip bootstrap; else `dp_name` plus optional `dp_location_code`, `dp_unit`, `dp_data_provider`, `dp_device_id`, `init_when_source_available`, `bootstrap_delay` (default `10s`) |
+
+### Update interval, polling interval and lag time
+
+The regularizer works with two sets of timestamps:
+
+- **Sample grid.** Each incoming sample is assigned to the nearest point `epoch + k * update_interval`, provided it lies within `jitter_tolerance` of that point.
+- **Frontier.** The frontier is the next grid point to be finalized. At startup it is set to `floor(start_time, polling_interval) - lag_time`. After that it advances in steps of `update_interval`.
+
+A grid point is finalized as **measured** only if the frontier timestamp is identical to the timestamp of a snapped sample. The frontier therefore has to start on the sample grid. Because it then advances by `update_interval`, it stays on that grid. The start point is on the sample grid if both of these hold:
+
+- `update_interval` divides `polling_interval`, and
+- `update_interval` divides `lag_time`.
+
+If either condition is violated, no frontier timestamp matches a sample timestamp. No point is then finalized as measured: every point is imputed or forecast without any measured values to work from, which typically yields NaN. Late samples are dropped instead of being applied as corrections, and pending samples are never removed from memory.
+
+When loading the configuration, the service logs a warning for each channel that violates one of the conditions.
 
 ### Imputation and forecast strategies
 
