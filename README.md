@@ -81,13 +81,13 @@ When loading the configuration, the service logs a warning for each channel that
 |-------|-----------|--------------|
 | `default` / `const_fill` | last observation carried forward, then next observation | repeats the last history value |
 | `linear` | linear interpolation between the bounding values | not available (needs a right bound) |
-| `daily_naive` | same time of day on the nearest known day | same time of day on preceding days |
-| `knn` | distance-weighted average over the `k` most similar days | same, extrapolated past the last measurement |
-| `soft_threshold_svd` | low-rank completion of the day-by-slot matrix | same, extrapolated past the last measurement |
+| `daily_naive` | same offset on the nearest known period (default one day) | same offset on preceding periods |
+| `knn` | distance-weighted average over the `k` most similar periods | same, extrapolated past the last measurement |
+| `soft_threshold_svd` | low-rank completion of the period-by-slot matrix | same, extrapolated past the last measurement |
 | `chronos_bolt` | not available | zero-shot Chronos-Bolt (CPU); opt-in extra |
 | `chronos_2` | not available | zero-shot Chronos-2, univariate (CPU); opt-in extra |
 
-`daily_naive`, `knn`, and `soft_threshold_svd` reshape the window into a day-by-slot matrix, so `update_interval` must divide a day evenly and `window` should span several days. With less than a day of history every column holds a single value and these strategies yield NaN.
+`daily_naive`, `knn`, and `soft_threshold_svd` reshape the window into a period-by-slot matrix. `period` defaults to one day and is set with the `period` constructor kwarg (`12h`, `1d`). `update_interval` must divide that period evenly, and `window` should span several periods. With fewer than two periods of history every column holds a single value and these strategies yield NaN.
 
 `imputer` and `forecaster` may be a name, or a mapping whose `name` is that value and whose other keys are constructor kwargs:
 
@@ -95,6 +95,7 @@ When loading the configuration, the service logs a warning for each channel that
 forecaster:
   name: knn
   k: 7
+  period: 12h
 ```
 
 `chronos_bolt` and `chronos_2` are optional; see [Chronos forecasters](#chronos-forecasters).

@@ -2,7 +2,7 @@
 
 The process loads YAML through `pyrdp_commons.cli.setup_app`. The CLI default path is `config.yml` in the working directory (`python -m regularizer -c config.yml`).
 
-`imputer` accepts `default`, `const_fill`, `linear`, `daily_naive`, `knn`, or `soft_threshold_svd`; `forecaster` accepts the same names except `linear`, plus `chronos_bolt` and `chronos_2`. Either field may be a string name or a mapping `{name, ...}` whose other keys are constructor kwargs (`k`, `max_rank`, `shrinkage`, Chronos `model_path` / `cache_dir`). `daily_naive`, `knn`, and `soft_threshold_svd` reshape the window into a day-by-slot matrix, so they need an `update_interval` that divides a day evenly and a `window` spanning several days.
+`imputer` accepts `default`, `const_fill`, `linear`, `daily_naive`, `knn`, or `soft_threshold_svd`; `forecaster` accepts the same names except `linear`, plus `chronos_bolt` and `chronos_2`. Either field may be a string name or a mapping `{name, ...}` whose other keys are constructor kwargs (`k`, `max_rank`, `shrinkage`, `period`, Chronos `model_path` / `cache_dir`). `daily_naive`, `knn`, and `soft_threshold_svd` reshape the window into a period-by-slot matrix. `period` defaults to one day (`12h`, `1d`). They need an `update_interval` that divides that period evenly and a `window` spanning several periods.
 
 Copy the example below and adjust hosts and credentials. `temperature` bootstraps from TimescaleDB; `setpoint` is live-only.
 
